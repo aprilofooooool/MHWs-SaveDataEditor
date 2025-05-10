@@ -1,0 +1,19 @@
+{
+    "Lua.workspace.library": [
+        "${workspaceFolder}/Library", 
+    ],
+    // Luaのバージョンを指定 (REFrameworkが使用するバージョンに合わせると良いかもしれません)
+    "Lua.runtime.version": "Lua 5.4", //"LuaJIT", // または "Lua 5.4" など [4]
+    "Lua.diagnostics.globals": [
+        "reframework",
+        "sdk",
+        "draw",
+        "fs",
+        "imgui",
+        "json",
+        "log",
+        "re",
+    ],
+    "Lua.workspace.checkThirdParty": false,
+    "Lua.workspace.maxPreload": 100000
+}
