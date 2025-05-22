@@ -1,3 +1,5 @@
+-- SaveDataEditor/BasicData.lua
+-- 基本情報 (ハンターランク、所持金など) の編集ロジックを担当するモジュール
 local sdk = sdk
 local log = log
 local imgui = imgui
@@ -6,133 +8,227 @@ local pcall = pcall
 local tostring = tostring
 local type = type
 local string = string
-local math = math
+local math = math -- 既に使用されているのでそのまま
 
+-- 必須モジュールの読み込み
 local Localized = require("SaveDataEditor/Localized")
+local Constants = require("SaveDataEditor/Constants")
+local Utils = require("SaveDataEditor/Utils")
+local SaveDataAccess = require("SaveDataEditor/SaveDataAccess")
 
 local M = {}
 
-local LOG_PREFIX = "[SaveDataEditor-BasicData] "
+local LOG_PREFIX = Constants.LOG_PREFIX_BASIC_DATA
 
+-- UI表示用の基本情報データ一時保管テーブル
 M.ui_state_basic_data = {
-    HunterRankPoint = 0, Money = 0, GuildPoint = 0, LuckyTicket = 0,
-    PlayTime = 0, CharName = "", OtomoName = "",
+    HunterRankPoint = Constants.DEFAULT_NUMBER,
+    Money = Constants.DEFAULT_NUMBER,
+    GuildPoint = Constants.DEFAULT_NUMBER,
+    LuckyTicket = Constants.DEFAULT_NUMBER,
+    PlayTime = Constants.DEFAULT_NUMBER,
+    CharName = Constants.DEFAULT_STRING,
+    OtomoName = Constants.DEFAULT_STRING,
 }
 
-local function decrypt_value(encrypted, multiplier)
-    if multiplier == nil or multiplier == 0 then
-        log.error(LOG_PREFIX .. "Decryption error: Multiplier zero or nil.")
-        return 0
-    end
-    return math.floor(encrypted / multiplier)
-end
-
-local function encrypt_value(value, multiplier)
-    if multiplier == nil then
-        log.error(LOG_PREFIX .. "Encryption error: Multiplier nil.")
-        return 0
-    end
-    return math.floor(value * multiplier)
-end
-
-local function get_decrypted_field_value(basic_data_obj, field_name)
-    if not basic_data_obj then return nil, nil, "BasicData obj nil" end
-    local mandrake_obj = basic_data_obj:get_field(field_name)
-    if not mandrake_obj then return nil, nil, "Field get fail:" .. field_name end
-    local encrypted_val = mandrake_obj:get_field("v")
-    local multiplier_val = mandrake_obj:get_field("m")
-    if type(encrypted_val) ~= "number" or type(multiplier_val) ~= "number" then
-        return nil, nil, field_name .. " v or m field is not number"
-    end
-    local decrypted = decrypt_value(encrypted_val, multiplier_val)
-    return decrypted, multiplier_val, nil
-end
-
+--- セーブデータから基本情報を読み込み、M.ui_state_basic_data に格納する
+-- @return 読み込み成功時はtrue、失敗時はfalse
 function M.load_basic_data_from_save()
-    local success_flag = false
-    local last_error = "Unknown load error"
-    local ok, err = pcall(function()
-        local sdManager = sdk.get_managed_singleton("app.SaveDataManager"); if not sdManager then error("SaveDataManager not found") end
-        local getCurMeth = sdManager:get_type_definition():get_method("getCurrentUserSaveData"); if not getCurMeth then error("getCurrentUserSaveData method not found") end
-        local get_s, res = pcall(getCurMeth.call, getCurMeth, sdManager); if not get_s or not res then error("Failed to call getCurrentUserSaveData or got nil result") end
-        local curSave; if type(res) == "userdata" then curSave = res elseif type(res) == "number" and res ~= 0 then curSave = sdk.to_managed_object(res) end
-        if not curSave then error("Failed to get managed object for current save data") end
-        local basicDataObj = curSave:get_field("_BasicData"); if not basicDataObj then error("_BasicData field not found") end
+    local load_success = false
+    local error_message = "Unknown error during basic data load."
 
-        local hrp, _, hrp_err = get_decrypted_field_value(basicDataObj, "HunterPoint")
-        local money, _, money_err = get_decrypted_field_value(basicDataObj, "Money")
-        local point, _, point_err = get_decrypted_field_value(basicDataObj, "Point")
-        local ticket, _, ticket_err = get_decrypted_field_value(basicDataObj, "LuckyTicket")
+    local pcall_success, pcall_result = pcall(function()
+        local current_save_data, err_msg_save = SaveDataAccess.get_current_save_data_object()
+        if not current_save_data then error(err_msg_save or "Failed to get current save data object.") end
 
-        if hrp_err then error(hrp_err) end; if money_err then error(money_err) end; if point_err then error(point_err) end; if ticket_err then error(ticket_err) end
+        local basic_data_object = current_save_data:get_field(Constants.FIELD_SAVE_BASIC_DATA)
+        if not basic_data_object then error("'_BasicData' field not found in save data.") end
 
-        M.ui_state_basic_data.HunterRankPoint = hrp or 0
-        M.ui_state_basic_data.Money = money or 0
-        M.ui_state_basic_data.GuildPoint = point or 0
-        M.ui_state_basic_data.LuckyTicket = ticket or 0
+        -- Mandrake型フィールドの読み込み
+        local hrp, _, hrp_err = Utils.get_decrypted_mandrake_field(basic_data_object, Constants.FIELD_BASIC_HUNTER_POINT)
+        if hrp_err then error("Error reading HunterRankPoint: " .. hrp_err) end
+        M.ui_state_basic_data.HunterRankPoint = hrp or Constants.DEFAULT_NUMBER
 
-        local play_time_val = curSave:get_field("PlayTime")
-        M.ui_state_basic_data.PlayTime = (type(play_time_val) == "number") and play_time_val or 0
-        local char_name_val = basicDataObj:get_field("CharName")
-        M.ui_state_basic_data.CharName = (type(char_name_val) == "string") and char_name_val or ""
-        local otomo_name_val = basicDataObj:get_field("OtomoName")
-        M.ui_state_basic_data.OtomoName = (type(otomo_name_val) == "string") and otomo_name_val or ""
-        success_flag = true
+        local money, _, money_err = Utils.get_decrypted_mandrake_field(basic_data_object, Constants.FIELD_BASIC_MONEY)
+        if money_err then error("Error reading Money: " .. money_err) end
+        M.ui_state_basic_data.Money = money or Constants.DEFAULT_NUMBER
+
+        local guild_points, _, gp_err = Utils.get_decrypted_mandrake_field(basic_data_object, Constants
+        .FIELD_BASIC_POINT)
+        if gp_err then error("Error reading GuildPoint: " .. gp_err) end
+        M.ui_state_basic_data.GuildPoint = guild_points or Constants.DEFAULT_NUMBER
+
+        local lucky_tickets, _, lt_err = Utils.get_decrypted_mandrake_field(basic_data_object,
+            Constants.FIELD_BASIC_LUCKY_TICKET)
+        if lt_err then error("Error reading LuckyTicket: " .. lt_err) end
+        M.ui_state_basic_data.LuckyTicket = lucky_tickets or Constants.DEFAULT_NUMBER
+
+        -- 通常フィールドの読み込み
+        local play_time_value = current_save_data:get_field(Constants.FIELD_BASIC_PLAY_TIME)
+        M.ui_state_basic_data.PlayTime = (type(play_time_value) == "number") and play_time_value or
+        Constants.DEFAULT_NUMBER
+
+        local char_name_value = basic_data_object:get_field(Constants.FIELD_BASIC_CHAR_NAME)
+        M.ui_state_basic_data.CharName = (type(char_name_value) == "string") and char_name_value or
+        Constants.DEFAULT_STRING
+
+        local otomo_name_value = basic_data_object:get_field(Constants.FIELD_BASIC_OTOMO_NAME)
+        M.ui_state_basic_data.OtomoName = (type(otomo_name_value) == "string") and otomo_name_value or
+        Constants.DEFAULT_STRING
+
+        load_success = true -- 全ての処理が成功した場合
     end)
-    if not ok then log.error(LOG_PREFIX .. "Load failed: " .. tostring(err)); last_error = tostring(err)
-    elseif not success_flag then log.error(LOG_PREFIX .. "Load failed internally: " .. last_error) end
-    return success_flag
+
+    if not pcall_success then
+        error_message = tostring(pcall_result)
+        log.error(LOG_PREFIX .. "Load basic data failed (pcall error): " .. error_message)
+        load_success = false
+    elseif not load_success then -- pcallは成功したが、内部ロジックでload_successがtrueにならなかった場合
+        log.error(LOG_PREFIX .. "Load basic data failed (internal logic): " .. error_message)
+    else
+        log.info(LOG_PREFIX .. "Basic data loaded successfully.")
+    end
+    return load_success
 end
 
+--- M.ui_state_basic_data の内容をセーブデータに書き込む
+-- @return 書き込み成功時はtrue、失敗時はfalse
 function M.write_basic_data_to_save()
-    local overall_success = true
-    local last_error_internal = "Unknown write error"
-    local ok, err = pcall(function()
-        local sdManager = sdk.get_managed_singleton("app.SaveDataManager"); if not sdManager then error("SDM get failed") end
-        local getCurMeth = sdManager:get_type_definition():get_method("getCurrentUserSaveData"); if not getCurMeth then error("gcm get failed") end
-        local get_s, res = pcall(getCurMeth.call, getCurMeth, sdManager); if not get_s or not res then error("gcm call failed") end
-        local curSave; if type(res) == "userdata" then curSave = res elseif type(res) == "number" and res ~= 0 then curSave = sdk.to_managed_object(res) end
-        if not curSave then error("Save obj conv failed") end
-        local basicDataObj = curSave:get_field("_BasicData"); if not basicDataObj then error("_BasicData get failed") end
+    local overall_write_success = false
+    local error_message = "Unknown error during basic data write."
 
-        local fields_to_process = {
-            { ui_key = "HunterRankPoint", field_name = "HunterPoint" }, { ui_key = "Money", field_name = "Money" },
-            { ui_key = "GuildPoint", field_name = "Point" }, { ui_key = "LuckyTicket", field_name = "LuckyTicket" },
+    local pcall_success, pcall_result = pcall(function()
+        local current_save_data, err_msg_save = SaveDataAccess.get_current_save_data_object()
+        if not current_save_data then error(err_msg_save or "Failed to get current save data object for writing.") end
+
+        local basic_data_object = current_save_data:get_field(Constants.FIELD_SAVE_BASIC_DATA)
+        if not basic_data_object then error("'_BasicData' field not found in save data for writing.") end
+
+        -- Mandrake型フィールドの書き込み処理
+        local mandrake_fields_to_process = {
+            { ui_key = "HunterRankPoint", field_name = Constants.FIELD_BASIC_HUNTER_POINT },
+            { ui_key = "Money",           field_name = Constants.FIELD_BASIC_MONEY },
+            { ui_key = "GuildPoint",      field_name = Constants.FIELD_BASIC_POINT },
+            { ui_key = "LuckyTicket",     field_name = Constants.FIELD_BASIC_LUCKY_TICKET },
         }
-        for _, field_info in ipairs(fields_to_process) do
-            local ui_key = field_info.ui_key; local field_name = field_info.field_name
-            local target_value_lua_num = M.ui_state_basic_data[ui_key]
-            local mandrake_obj = basicDataObj:get_field(field_name); if not mandrake_obj then error(field_name .. " field get failed") end
-            local current_multiplier = mandrake_obj:get_field("m"); if type(current_multiplier) ~= "number" then error(field_name .. " multiplier invalid") end
-            local new_encrypted_v_num = encrypt_value(target_value_lua_num, current_multiplier)
-            local set_v_ok, set_v_err; if mandrake_obj.set_field then set_v_ok, set_v_err = pcall(mandrake_obj.set_field, mandrake_obj, "v", new_encrypted_v_num); if not set_v_ok then error("Set local 'v' failed for " .. field_name .. ": " .. tostring(set_v_err)) end else error(":set_field not found on Mandrake for " .. field_name) end
-            local set_back_ok, set_back_err; if basicDataObj.set_field then set_back_ok, set_back_err = pcall(basicDataObj.set_field, basicDataObj, field_name, mandrake_obj); if not set_back_ok then error("Set back Mandrake failed for " .. field_name .. ": " .. tostring(set_back_err)) end else error("Parent :set_field not found.") end
+
+        for _, field_detail in ipairs(mandrake_fields_to_process) do
+            local target_plain_value = M.ui_state_basic_data[field_detail.ui_key]
+
+            -- Mandrakeオブジェクトをローカルコピーとして取得 (sdk.set_fieldが使えない対策)
+            local mandrake_obj_local_copy = basic_data_object:get_field(field_detail.field_name)
+            if not mandrake_obj_local_copy then error("Failed to get Mandrake object for field: " ..
+                field_detail.field_name) end
+
+            local current_multiplier = mandrake_obj_local_copy:get_field(Constants.FIELD_MANDRAKE_MULTIPLIER)
+            if type(current_multiplier) ~= "number" then
+                error("Invalid multiplier for field '" ..
+                field_detail.field_name .. "': type is " .. type(current_multiplier))
+            end
+
+            local new_encrypted_value = Utils.encrypt_mandrake_value(target_plain_value, current_multiplier)
+
+            -- ローカルコピーの 'v' フィールドを更新
+            -- Mandrakeオブジェクト自体が :set_field を持つことを期待
+            if not mandrake_obj_local_copy.set_field then error("Mandrake object for '" ..
+                field_detail.field_name .. "' does not have a ':set_field' method.") end
+            local set_v_success, set_v_err = pcall(mandrake_obj_local_copy.set_field, mandrake_obj_local_copy,
+                Constants.FIELD_MANDRAKE_ENCRYPTED_VALUE, new_encrypted_value)
+            if not set_v_success then error("Failed to set 'v' on local Mandrake copy for '" ..
+                field_detail.field_name .. "': " .. tostring(set_v_err)) end
+
+            -- 変更したローカルコピーを親オブジェクトにセットし直す
+            -- 親オブジェクト (_BasicData) が :set_field を持つことを期待
+            if not basic_data_object.set_field then error(
+                "Parent object '_BasicData' does not have a ':set_field' method.") end
+            local set_back_success, set_back_err = pcall(basic_data_object.set_field, basic_data_object,
+                field_detail.field_name, mandrake_obj_local_copy)
+            if not set_back_success then error("Failed to set back modified Mandrake object for '" ..
+                field_detail.field_name .. "': " .. tostring(set_back_err)) end
+
+            log.info(LOG_PREFIX .. "Successfully wrote Mandrake field: " .. field_detail.field_name)
         end
 
-        local pt_val = M.ui_state_basic_data.PlayTime; local pt_ok, pt_err = pcall(function() curSave.PlayTime = pt_val end)
-        if not pt_ok then log.error(LOG_PREFIX .. "Write PlayTime failed:" .. tostring(pt_err)); overall_success = false end
-        local cn_val = M.ui_state_basic_data.CharName; local cn_ok, cn_err = pcall(function() basicDataObj.CharName = cn_val end)
-        if not cn_ok then log.error(LOG_PREFIX .. "Write CharName failed:" .. tostring(cn_err)); overall_success = false end
-        local on_val = M.ui_state_basic_data.OtomoName; local on_ok, on_err = pcall(function() basicDataObj.OtomoName = on_val end)
-        if not on_ok then log.error(LOG_PREFIX .. "Write OtomoName failed:" .. tostring(on_err)); overall_success = false end
+        -- 通常フィールドの書き込み
+        local write_direct_field = function(parent_obj, field_name_const, ui_value, field_description)
+            local success, err = pcall(function() parent_obj[field_name_const] = ui_value end)
+            if not success then
+                log.error(LOG_PREFIX .. "Write " .. field_description .. " failed: " .. tostring(err))
+                overall_write_success = false -- 1つでも失敗したら全体をfalseに
+            else
+                log.info(LOG_PREFIX .. "Successfully wrote field: " .. field_description)
+            end
+        end
+
+        -- まず全体をtrueに設定し、個々の失敗でfalseにする
+        overall_write_success = true
+        write_direct_field(current_save_data, Constants.FIELD_BASIC_PLAY_TIME, M.ui_state_basic_data.PlayTime, "PlayTime")
+        write_direct_field(basic_data_object, Constants.FIELD_BASIC_CHAR_NAME, M.ui_state_basic_data.CharName,
+            "Character Name")
+        write_direct_field(basic_data_object, Constants.FIELD_BASIC_OTOMO_NAME, M.ui_state_basic_data.OtomoName,
+            "Otomo Name")
     end)
-    if not ok then log.error(LOG_PREFIX .. "Write failed during pcall:" .. tostring(err)); overall_success = false; last_error_internal = tostring(err)
-    elseif not overall_success then log.error(LOG_PREFIX .. "Write finished with internal errors. Last: " .. (last_error_internal or "N/A")) end
-    return overall_success
+
+    if not pcall_success then
+        error_message = tostring(pcall_result)
+        log.error(LOG_PREFIX .. "Write basic data failed (pcall error): " .. error_message)
+        overall_write_success = false
+    elseif not overall_write_success then -- pcallは成功したが、内部ロジックで失敗があった場合
+        log.error(LOG_PREFIX .. "Write basic data partially failed (internal logic). Check previous logs.")
+    else
+        log.info(LOG_PREFIX .. "Basic data written successfully.")
+    end
+    return overall_write_success
 end
 
-function M.draw_basic_data_ui(is_loaded)
-    local T = Localized.T
-    if not is_loaded then imgui.text_colored(T.load_needed_for_basic or "Load data.", 0xFFAAAAAA); return end
-    local dw = 120.0; local iw = 120.0
+--- 基本情報編集用のUIを描画する
+-- @param is_data_loaded データが正常に読み込まれているかのフラグ
+function M.draw_basic_data_ui(is_data_loaded)
+    local T = Localized.T -- 現在の言語テキストを取得
+    if not is_data_loaded then
+        imgui.text_colored(T.load_needed_for_basic or "Load data to edit Basic Info.", 0xFFAAAAAA)
+        return
+    end
 
-    imgui.set_next_item_width(iw); local ch_cn, n_cn = imgui.input_text(T.char_name or "Char Name", M.ui_state_basic_data.CharName); if ch_cn then M.ui_state_basic_data.CharName = n_cn end
-    imgui.set_next_item_width(iw); local ch_on, n_on = imgui.input_text(T.otomo_name or "Palico Name", M.ui_state_basic_data.OtomoName); if ch_on then M.ui_state_basic_data.OtomoName = n_on end
-    imgui.set_next_item_width(dw); local ch_pt, n_pt = imgui.drag_int(T.play_time or "PlayTime(s)", M.ui_state_basic_data.PlayTime, 3600, 0, 0xFFFFFFFF); if ch_pt then M.ui_state_basic_data.PlayTime = n_pt end
-    imgui.set_next_item_width(dw); local ch_h, n_h = imgui.drag_int(T.hunter_rank_point or "HR Pts", M.ui_state_basic_data.HunterRankPoint, 100, 0, 99999999); if ch_h then M.ui_state_basic_data.HunterRankPoint = n_h end
-    imgui.set_next_item_width(dw); local ch_m, n_m = imgui.drag_int(T.money or "Money", M.ui_state_basic_data.Money, 1000, 0, 99999999); if ch_m then M.ui_state_basic_data.Money = n_m end
-    imgui.set_next_item_width(dw); local ch_g, n_g = imgui.drag_int(T.guild_point or "Guild Pts", M.ui_state_basic_data.GuildPoint, 100, 0, 99999999); if ch_g then M.ui_state_basic_data.GuildPoint = n_g end
-    imgui.set_next_item_width(dw); local ch_t, n_t = imgui.drag_int(T.lucky_ticket or "Lucky Vouchers", M.ui_state_basic_data.LuckyTicket, 1, 0, 5); if ch_t then M.ui_state_basic_data.LuckyTicket = n_t end
+    -- UI要素の幅定義
+    local drag_int_width = 150.0   -- 数値入力フィールドの幅
+    local input_text_width = 150.0 -- テキスト入力フィールドの幅
+
+    -- 各種基本情報の編集UI
+    imgui.set_next_item_width(input_text_width)
+    local name_changed, new_char_name = imgui.input_text(T.label_char_name or "Character Name",
+        M.ui_state_basic_data.CharName)
+    if name_changed then M.ui_state_basic_data.CharName = new_char_name end
+
+    imgui.set_next_item_width(input_text_width)
+    local otomo_name_changed, new_otomo_name = imgui.input_text(T.label_otomo_name or "Palico Name",
+        M.ui_state_basic_data.OtomoName)
+    if otomo_name_changed then M.ui_state_basic_data.OtomoName = new_otomo_name end
+
+    imgui.set_next_item_width(drag_int_width)
+    local play_time_changed, new_play_time = imgui.drag_int(T.label_play_time or "Play Time (s)",
+        M.ui_state_basic_data.PlayTime, 3600, 0, 0xFFFFFFFF)                                                                                           -- 上限は符号なし32bit整数の最大値
+    if play_time_changed then M.ui_state_basic_data.PlayTime = new_play_time end
+
+    imgui.set_next_item_width(drag_int_width)
+    local hrp_changed, new_hrp = imgui.drag_int(T.label_hunter_rank_point or "HR Points",
+        M.ui_state_basic_data.HunterRankPoint, 100, 0, Constants.MAX_MONEY_POINTS)
+    if hrp_changed then M.ui_state_basic_data.HunterRankPoint = new_hrp end
+
+    imgui.set_next_item_width(drag_int_width)
+    local money_changed, new_money = imgui.drag_int(T.label_money or "Zenny", M.ui_state_basic_data.Money, 1000, 0,
+        Constants.MAX_MONEY_POINTS)
+    if money_changed then M.ui_state_basic_data.Money = new_money end
+
+    imgui.set_next_item_width(drag_int_width)
+    local gp_changed, new_gp = imgui.drag_int(T.label_guild_point or "Guild Points", M.ui_state_basic_data.GuildPoint,
+        100, 0, Constants.MAX_MONEY_POINTS)
+    if gp_changed then M.ui_state_basic_data.GuildPoint = new_gp end
+
+    imgui.set_next_item_width(drag_int_width)
+    local ticket_changed, new_ticket_count = imgui.drag_int(T.label_lucky_ticket or "Lucky Vouchers",
+        M.ui_state_basic_data.LuckyTicket, 1, 0, Constants.MAX_LUCKY_TICKETS)
+    if ticket_changed then M.ui_state_basic_data.LuckyTicket = new_ticket_count end
 end
 
 return M
