@@ -1,34 +1,34 @@
--- SaveDataEditor/Localized.lua
--- 多言語対応テキストと共有ゲームデータ定義を管理するモジュール
-local sdk = sdk -- 状況に応じて必要であれば使用
+
+
+local sdk = sdk 
 local log = log
 local ipairs = ipairs
 local pcall = pcall
 local table = table
 
-local Constants = require("SaveDataEditor/Constants") -- ログプレフィックス用
+local Constants = require("SaveDataEditor/Constants") 
 
 local M = {}
 
 local LOG_PREFIX = Constants.LOG_PREFIX_LOCALIZED
 
--- MODのデフォルト表示言語
-M.display_language = 'en' -- 'en' or 'ja'
 
--- 対応言語リスト
+M.display_language = 'en' 
+
+
 M.available_languages = {
     { code = 'en', name = "English" },
     { code = 'ja', name = "Japanese" },
-    -- 今後他の言語を追加する場合はここに追加
+    
 }
 
--- imgui.comboで使用するための言語名リスト
+
 M.language_names_for_combo = {}
 for _, lang_data_entry in ipairs(M.available_languages) do
     table.insert(M.language_names_for_combo, lang_data_entry.name)
 end
 
--- ゲーム内データ定義 (FixedIDや内部IDはゲームバージョンに依存する可能性あり)
+
 M.game_data = {
     weapon_types = {
         { id = 0, name_ja = "大剣", name_en = "Great Sword" }, { id = 1, name_ja = "片手剣", name_en = "Sword & Shield" },
@@ -40,8 +40,8 @@ M.game_data = {
         { id = 12, name_ja = "ヘビィボウガン", name_en = "Heavy Bowgun" }, { id = 13, name_ja = "ライトボウガン", name_en = "Light Bowgun" },
     },
     quest_categories = {
-        -- data_index: 元のセーブデータ内での順序インデックスの可能性 (現在は未使用)
-        -- category_fixed_id: セーブデータ内でカテゴリを特定するためのID
+        
+        
         { key = "Assignments", name_ja = "任務クエスト", name_en = "Assignments", data_index = 0, category_fixed_id = -1081821056 },
         { key = "Optional", name_ja = "フリークエスト", name_en = "Optional Quests", data_index = 1, category_fixed_id = -1381773696 },
         { key = "FieldSurvey", name_ja = "現地調査クエスト", name_en = "FieldSurvey", data_index = 2, category_fixed_id = -1238133888 },
@@ -51,7 +51,7 @@ M.game_data = {
         { key = "Challenge", name_ja = "チャレンジクエスト", name_en = "Challenge Quests", data_index = 6, category_fixed_id = 630192064 },
         { key = "TAFreeQuests", name_ja = "フリーチャレンジ", name_en = "TA Free Quests", data_index = 7, category_fixed_id = -2008503424 }
     },
-    monster_list = { -- モンスターの全リスト (FixedId: -334290336 のような未定義IDはセーブデータには存在しうる)
+    monster_list = { 
         { FixedId = 26, name_en = "Rathian", name_ja = "リオレイア", min_size_lower_bound = 90, max_size_upper_bound = 123 },
         { FixedId = 402056736, name_en = "Yian Kut-Ku", name_ja = "イャンクック", min_size_lower_bound = 90, max_size_upper_bound = 123 },
         { FixedId = 1049705664, name_en = "Gypceros", name_ja = "ゲリョス", min_size_lower_bound = 90, max_size_upper_bound = 123 },
@@ -86,14 +86,17 @@ M.game_data = {
     charm_list = {
         { type_num = 79, name_ja = "挑戦者の証【闢獣】", name_en = "Doshaguma: Mark of Contest" },
         { type_num = 80, name_ja = "勇者の証【闢獣】", name_en = "Doshaguma: Mark of Bravery" },
-        { type_num = 81, name_ja = "覇者の証【闢獣】", name_en = "Doshaguma: Mark of Mastery" }
+        { type_num = 81, name_ja = "覇者の証【闢獣】", name_en = "Doshaguma: Mark of Mastery" },
+        { type_num = 82, name_ja = "挑戦者の証【煌雷竜】", name_en = "Rey Dau: Mark of Contest" },
+        { type_num = 83, name_ja = "勇者の証【煌雷竜】", name_en = "Rey Dau: Mark of Bravery" },
+        { type_num = 84, name_ja = "覇者の証【煌雷竜】", name_en = "Rey Dau: Mark of Mastery" }
     }
 }
 
--- UI等で使用する翻訳済みテキスト
+
 M.localized_texts_table = {
     ja = {
-        -- メインUI
+        
         profile_editor = "SaveDataEditor",
         load_button = "データ読込",
         save_changes_button = "変更を保存",
@@ -115,7 +118,7 @@ M.localized_texts_table = {
         msg_save_fail_basic = "BasicInfo fail.",
         msg_save_fail_wpn_use = "WeaponUse fail.",
         msg_save_fail_mon_hunt = "MonsterHunt fail.",
-        -- Basic Info
+        
         section_title_basic_data = "基本情報",
         load_needed_for_basic = "基本情報を表示/編集するにはデータを読み込んでください。",
         label_hunter_rank_point = "ハンターランクポイント",
@@ -125,17 +128,17 @@ M.localized_texts_table = {
         label_play_time = "プレイ時間 (秒)",
         label_char_name = "プレイヤー名",
         label_otomo_name = "オトモ名",
-        -- Weapon Use
+        
         section_title_weapon_use = "武器使用回数",
         load_needed_for_weapon = "武器使用回数を表示/編集するにはデータを読み込んでください。",
         label_main_total = "メイン合計",
         label_sub_total = "サブ合計",
-        label_total_mismatch_warning = "<警告>合計数が不一致です (%s)", -- %s は期待される関係性など
+        label_total_mismatch_warning = "<警告>合計数が不一致です (%s)", 
         label_main_weapon_header = "メイン武器",
         label_sub_weapon_header = "サブ武器",
         label_weapon_type_header = "武器種",
         label_no_play_history_for_category = "このカテゴリのプレイ履歴はありません。",
-        -- Monster Hunt
+        
         section_title_monster_hunt = "モンスター狩猟数",
         load_needed_for_monster = "モンスター狩猟数を表示/編集するにはデータを読み込んでください。",
         label_monster_name_header = "モンスター名",
@@ -145,17 +148,17 @@ M.localized_texts_table = {
         label_max_size_header = "最大サイズ",
         unknown_monster_name_prefix = "不明なID:",
         unknown_category_name_prefix = "不明カテゴリ(ID:",
-        -- charm owned
+        
         section_title_charm_editor = "チャームアンロック",
         charm_get_success_message = "チャーム「%s」を取得済みに設定しました。",
         charm_get_fail_message = "チャーム「%s」の取得設定に失敗しました。ログを確認してください。",
         charm_system_error_init = "Error: Charm system not initialized.",
         charm_system_error_prepare = "Error: Failed to prepare charm system.",
-        label_set_all_non_dlc_charms_owned = "DLCを除く全てのチャームを所有済みにする", -- ★新規追加★
-        no_charms_defined_message = "Localized.lua にチャームが定義されていません。", -- ★追加または既存のものを流用★
+        label_set_all_non_dlc_charms_owned = "DLCを除く全てのチャームを所有済みにする", 
+        no_charms_defined_message = "Localized.lua にチャームが定義されていません。", 
     },
     en = {
-        -- Main UI
+        
         profile_editor = "SaveDataEditor",
         load_button = "Load Data",
         save_changes_button = "Save Changes",
@@ -177,7 +180,7 @@ M.localized_texts_table = {
         msg_save_fail_basic = "BasicInfo fail.",
         msg_save_fail_wpn_use = "WeaponUse fail.",
         msg_save_fail_mon_hunt = "MonsterHunt fail.",
-        -- Basic Info
+        
         section_title_basic_data = "Basic Info",
         load_needed_for_basic = "Load data to display/edit Basic Info.",
         label_hunter_rank_point = "Hunter Rank Points",
@@ -187,7 +190,7 @@ M.localized_texts_table = {
         label_play_time = "Play Time (seconds)",
         label_char_name = "Character Name",
         label_otomo_name = "Palico Name",
-        -- Weapon Use
+        
         section_title_weapon_use = "Weapon Use Count",
         load_needed_for_weapon = "Load data to display/edit Weapon Use Counts.",
         label_main_total = "Main Total",
@@ -197,7 +200,7 @@ M.localized_texts_table = {
         label_sub_weapon_header = "Sub Weapon",
         label_weapon_type_header = "Weapon Type",
         label_no_play_history_for_category = "No play history for this category.",
-        -- Monster Hunt
+        
         section_title_monster_hunt = "Monster Hunt Counts",
         load_needed_for_monster = "Load data to display/edit Monster Hunt Counts.",
         label_monster_name_header = "Monster Name",
@@ -207,37 +210,37 @@ M.localized_texts_table = {
         label_max_size_header = "Max Size",
         unknown_monster_name_prefix = "Unknown ID:",
         unknown_category_name_prefix = "Unk.Category(ID:",
-        -- charm owned
+        
         section_title_charm_editor = "Charm Unlock",
         charm_get_success_message = "Charm '%s' set to owned.",
         charm_get_fail_message = "Failed to set charm '%s' to owned. Check log.",
         charm_system_error_init = "Error: Charm system not initialized.",
         charm_system_error_prepare = "Error: Failed to prepare charm system.",
-        label_set_all_non_dlc_charms_owned = "Set all non-DLC charms as owned", -- ★Newly Added★
-        no_charms_defined_message = "No charms defined in Localized.lua.", -- ★Added or reused★
+        label_set_all_non_dlc_charms_owned = "Set all non-DLC charms as owned", 
+        no_charms_defined_message = "No charms defined in Localized.lua.", 
     }
 }
 
--- 現在の言語に対応するテキストを格納するテーブル (M.T)
-M.T = {} -- 初期化は M.initialize_localization で行う
 
---- 指定されたアイテムオブジェクトから、現在の言語に基づいた名前を取得するヘルパー関数
--- @param item 対象のアイテムオブジェクト (name_ja, name_en フィールドを持つことを期待)
--- @param language_code 現在の言語コード (例: "ja", "en")
--- @return ローカライズされた名前。見つからない場合は英語名、それもなければ固定の不明名
+M.T = {} 
+
+
+
+
+
 function M.get_localized_name_for_item(item, language_code)
     local name_key_for_lang = "name_" .. language_code
-    return item[name_key_for_lang] or item.name_en or "UnknownName" -- フォールバック
+    return item[name_key_for_lang] or item.name_en or "UnknownName" 
 end
 
---- ローカライゼーション情報を初期化・更新する関数
--- M.display_language の変更後に呼び出す必要がある
+
+
 function M.initialize_localization()
     local current_lang_code = M.display_language
-    -- M.T を現在の言語のテキストで更新 (フォールバックは英語)
+    
     M.T = M.localized_texts_table[current_lang_code] or M.localized_texts_table['en']
 
-    -- ゲームデータ内の各名称をローカライズ (localized_name フィールドを追加)
+    
     if M.game_data and M.game_data.weapon_types then
         for _, weapon_data in ipairs(M.game_data.weapon_types) do
             weapon_data.localized_name = M.get_localized_name_for_item(weapon_data, current_lang_code)
@@ -254,15 +257,15 @@ function M.initialize_localization()
         end
     end
     if M.game_data and M.game_data.charm_list then
-        -- CharmEditor自体は個別の名前を使わなくなるが、他の場所で参照される可能性を考慮し、
-        -- Localized.game_data.charm_list の localized_name 更新は残しておく。
+        
+        
         for _, charm_type in ipairs(M.game_data.charm_list) do
             charm_type.localized_name = M.get_localized_name_for_item(charm_type, current_lang_code)
         end
     end
     log.info(LOG_PREFIX .. "Localization initialized for language: " .. current_lang_code)
 end
--- モジュールロード時に一度ローカライゼーションを初期化
+
 M.initialize_localization()
 
 return M
